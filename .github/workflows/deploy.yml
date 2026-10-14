@@ -1,8 +1,10 @@
+
 name: CI/CD - Build and Deploy to VPS
 
 on:
   push:
     branches: [master]
+  workflow_dispatch:
 
 env:
   IMAGE_NAME: trongan2006/devops-exam-app
@@ -10,6 +12,8 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -44,6 +48,8 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    timeout-minutes: 8
+
     steps:
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1
@@ -52,12 +58,22 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
+          timeout: 30s
+          command_timeout: 5m
           script: |
             set -e
-            cd ~/devops-exam
-        
-            git pull --ff-only origin master
-           
+
+            echo "STEP 1: SSH CONNECTED"
+            whoami
+            hostname
+
+            echo "STEP 2: ENTER PROJECT"
+            cd ~/devops-exam/PTIT_CNTT1_IT209_Session14
+
+            echo "STEP 3: GIT PULL"
+            GIT_TERMINAL_PROMPT=0 git pull --ff-only origin master
+
+            echo "STEP 4: CREATE ENV"
             cat > .env <<'EOF'
             MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
             MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
@@ -67,9 +83,16 @@ jobs:
             SERVER_PORT=8080
             PAGE_SIZE_PRODUCTS=3
             EOF
+
             chmod 600 .env
+
+            echo "STEP 5: DOCKER PULL"
             docker compose pull
+
+            echo "STEP 6: DOCKER DEPLOY"
             docker compose up -d --remove-orphans
+
+            echo "STEP 7: CHECK CONTAINERS"
             docker ps
-            sleep 15
-            docker compose logs backend --tail=50 || true
+
+            echo "DEPLOY COMPLETED"
